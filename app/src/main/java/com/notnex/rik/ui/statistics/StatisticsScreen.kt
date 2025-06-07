@@ -3,42 +3,28 @@ package com.notnex.rik.ui.statistics
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notnex.rik.data.statistics.model.VisitorsChartPoint
 import com.notnex.rik.ui.statistics.components.AgeStatUi
+import com.notnex.rik.ui.statistics.components.ChartModeTabSelector
 import com.notnex.rik.ui.statistics.components.GenderAgeChart
+import com.notnex.rik.ui.statistics.components.GenderAgeTabSelector
 import com.notnex.rik.ui.statistics.components.ObserversCard
 import com.notnex.rik.ui.statistics.components.TopVisitorsList
 import com.notnex.rik.ui.statistics.components.VisitorsCard
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.unit.dp
-import com.notnex.rik.ui.statistics.ChartMode
-import com.notnex.rik.ui.statistics.GenderAgeMode
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -77,7 +63,6 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
             val totalViews = statistics.filter { it.type == "view" }.sumOf { it.dates.size }
             val dateFormatter = DateTimeFormatter.ofPattern("ddMMyyyy")
 
-            val chartModes = listOf("По дням", "По неделям", "По месяцам")
             val chartModeEnum = listOf(ChartMode.DAY, ChartMode.WEEK, ChartMode.MONTH)
             val selectedTabIndex = chartModeEnum.indexOf(chartMode)
 
@@ -140,7 +125,6 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
             val visitorIds = statistics.filter { it.type == "view" }.map { it.user_id }.toSet()
             val visitorUsers = users.filter { it.id in visitorIds }
 
-            val genderAgeModes = listOf("Сегодня", "Неделя", "Месяц", "Все время")
             val genderAgeModeEnum = listOf(GenderAgeMode.DAY, GenderAgeMode.WEEK, GenderAgeMode.MONTH, GenderAgeMode.ALL)
             val selectedGenderAgeTab = genderAgeModeEnum.indexOf(genderAgeMode)
 
@@ -177,6 +161,7 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
             val femalePercent = (femaleCount * 100) / total
 
             val ageGroups = listOf(
+                "0-18" to (0..17),
                 "18-21" to (18..21),
                 "22-25" to (22..25),
                 "26-30" to (26..30),
@@ -187,10 +172,14 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
             )
 
             val ageStats = ageGroups.map { (label, range) ->
+                val males = filteredVisitorUsers.count { it.sex == "M" && it.age in range }
+                val females = filteredVisitorUsers.count { it.sex == "W" && it.age in range }
+                val totalGroup = (males + females).takeIf { it > 0 } ?: 1
+
                 AgeStatUi(
                     range = label,
-                    malePercent = filteredVisitorUsers.count { it.sex == "M" && it.age in range } * 100 / total,
-                    femalePercent = filteredVisitorUsers.count { it.sex == "W" && it.age in range } * 100 / total
+                    malePercent = (males * 100) / totalGroup,
+                    femalePercent = (females * 100) / totalGroup
                 )
             }
 
@@ -203,52 +192,25 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
                     .fillMaxSize()
                     .padding(bottom = 16.dp)
             ) {
+                //график
                 item {
-                    // Вкладки режима графика
-                    TabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        containerColor = Color.Transparent,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.Indicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    ) {
-                        chartModes.forEachIndexed { index, title ->
-                            Tab(
-                                selected = selectedTabIndex == index,
-                                onClick = { viewModel.setChartMode(chartModeEnum[index]) },
-                                text = {
-                                    Text(title, style = MaterialTheme.typography.labelLarge)
-                                }
-                            )
-                        }
-                    }
+                    ChartModeTabSelector(
+                        selected = selectedTabIndex,
+                        onTabSelected = { viewModel.setChartMode(chartModeEnum[it]) }
+                    )
                 }
+
+
 
                 item { VisitorsCard(visitorsCount = totalViews, visitorsGrowth = true, chartPoints = chartPoints) }
                 item { TopVisitorsList(topUsers = topUsers) }
 
+                //пол и возраст
                 item {
-                    TabRow(
-                        selectedTabIndex = selectedGenderAgeTab,
-                        containerColor = Color.Transparent,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.Indicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedGenderAgeTab]),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    ) {
-                        genderAgeModes.forEachIndexed { index, title ->
-                            Tab(
-                                selected = selectedGenderAgeTab == index,
-                                onClick = { viewModel.setGenderAgeMode(genderAgeModeEnum[index]) },
-                                text = { Text(title, style = MaterialTheme.typography.labelLarge) }
-                            )
-                        }
-                    }
+                    GenderAgeTabSelector(
+                        selected = selectedGenderAgeTab,
+                        onTabSelected = { viewModel.setGenderAgeMode(genderAgeModeEnum[it]) }
+                    )
                 }
 
                 item {
@@ -270,3 +232,4 @@ fun StatisticsScreen(modifier: Modifier = Modifier) {
         }
     }
 }
+
